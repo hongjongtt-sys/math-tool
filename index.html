@@ -73,6 +73,13 @@
     border:1px solid #ccd3e0; background:#fff; color:#3a4257; cursor:pointer; }
   .resultText, .shelfBody { white-space:pre-wrap; font-size:14px; line-height:1.7; color:#2a3142; }
   .resultText { padding:16px 18px; max-height:70vh; overflow:auto; }
+  .verifyBox { border-top:1px dashed #d6dbe6; background:#f7faf7; }
+  .verifyBox.hidden { display:none; }
+  .verifyHead { font-size:12px; font-weight:700; letter-spacing:1px; color:#3f6b46; padding:10px 18px 0; }
+  .verifyText { white-space:pre-wrap; font-size:13.5px; line-height:1.7; color:#2f3a2f; padding:8px 18px 16px; }
+  .shelfKind { display:inline-block; font-size:11px; font-weight:700; padding:1px 7px; border-radius:6px; margin-right:6px; vertical-align:middle; }
+  .shelfKind.create { background:#e7eefc; color:#2f4b7c; }
+  .shelfKind.solve { background:#fbeede; color:#9a6a1e; }
   .shelfEmpty { text-align:center; color:#9aa2b5; font-size:13.5px; line-height:1.7; padding:36px 10px; }
   .shelfItem { background:#fff; border:1px solid #e3e7ef; border-radius:11px; overflow:hidden; margin-bottom:10px; }
   .shelfTop { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:12px 14px; }
@@ -186,11 +193,16 @@
       <div class="resultHead">
         <span class="resultLabel">결과</span>
         <div class="headBtns">
+          <button class="smallBtn hidden" id="verifyBtn">AI 검증</button>
           <button class="smallBtn hidden" id="saveBtn">보관함에 저장</button>
           <button class="smallBtn" id="copyBtn">복사</button>
         </div>
       </div>
       <div class="resultText" id="resultText"></div>
+      <div class="verifyBox hidden" id="verifyBox">
+        <div class="verifyHead">🔎 AI 2차 점검</div>
+        <div class="verifyText" id="verifyText"></div>
+      </div>
     </div>
   </div>
 
@@ -384,7 +396,7 @@ async function removeItem(id) {
 const GEN_SYSTEM = `너는 대한민국 고등학교 수학 교사를 돕는 '출제 보조'다. 2022 개정 교육과정 기준으로 문항을 만든다.
 - 요청한 단원/난이도/유형/개수에 정확히 맞춘다. 요청한 개수만큼 빠짐없이 만든다.
 - ★선택된 과목의 학습 범위 안에서만 출제하고 풀이한다. 그 과목에서 배우지 않는 개념·공식(예: 대수에서 삼각함수의 덧셈정리·배각·반각·합성, 미분·적분)은 문항 설계에도 풀이에도 절대 쓰지 마라. 문항은 그 과목 범위의 도구만으로 풀리도록 만든다. 아래에 '과목 범위'가 주어지면 그 경계를 엄격히 지킨다.
-- 난이도 '상'·'최상'이면 단순 대입이 아니라 두세 개념을 엮은, 사고 단계가 여러 개인 문항으로 만든다. 절대 쉽게 내지 마라.
+- 난이도를 정확히 맞춘다. '상'·'최상'은 한 줄 대입으로 풀리면 안 되고, 같은 과목 범위 안에서 여러 개념을 엮어 사고 단계가 여러 개인 비정형 문항으로 만든다. 단, 어렵게 만들겠다고 과목 범위를 벗어난 개념을 끌어오지 마라(난도는 깊이로 올리고, 범위는 그대로 둔다). 아래 '난이도 지침'이 주어지면 그대로 따른다.
 - 각 문항은 [문항 본문] → [검산 가능한 풀이] → [정답] 순서로 적는다. 정답은 반드시 풀이를 끝낸 뒤 맨 마지막에 쓴다. (풀어서 나온 결론을 정답으로 쓴다. 정답을 먼저 정해 두고 풀이를 끼워맞추지 마라.)
 - 다 쓴 뒤 '정답'과 풀이의 최종 결론이 같은 값인지 스스로 한 번 더 대조한다. 다르면 풀이를 다시 검토해 고치고, 둘을 반드시 일치시킨 뒤 출력한다.
 - 객관식이면 흔한 오개념에서 나오는 매력적인 오답으로 선택지를 설계한다.
@@ -429,6 +441,29 @@ const SUBJECT_SCOPE = {
   "확률과 통계": "경우의 수(중복순열·중복조합·이항정리), 확률(조건부확률·사건의 독립), 통계(확률변수와 확률분포, 이항분포, 정규분포, 표본평균의 분포, 모평균의 추정)까지. ★미적분·삼각함수 도구는 사용하지 않는다.",
   "기하": "이차곡선(포물선·타원·쌍곡선), 공간도형과 공간좌표, 벡터(평면벡터·공간벡터의 연산과 내적, 직선·평면의 방정식)까지."
 };
+
+// ---- 난이도 지침 (상·킬러 정밀화) ----
+const DIFFICULTY_GUIDE = {
+  "상": "상 난이도: 한 줄 대입으로 풀리지 않게 한다. 같은 과목 범위 안에서 2개 이상의 개념·성질을 결합하고, 풀이가 최소 3~4단계가 되도록 설계한다(조건 해석 → 식 세우기 → 경우 나누기/범위 따지기 → 결론). 객관식이면 흔한 계산·개념 실수에서 나오는 매력적인 오답을 선택지에 배치한다. 답이 우연히 보이지 않게 하되, 논리적으로 반드시 도달 가능해야 한다.",
+  "최상(킬러)": "최상(킬러) 난이도: 수능·모의고사 최고난도(준킬러~킬러) 수준. 같은 과목 범위 안에서 여러 개념을 깊게 엮고, 경우 분류·미정계수 결정·역방향 추론·그래프와 식의 연결·숨은 조건 해석 같은 비정형 사고를 요구한다. 풀이는 5단계 이상으로 치밀하게 전개한다. 답은 바로 보이지 않아야 하지만 조건만으로 유일하게 결정되어야 한다. 너무 꼬아서 풀이가 막히거나 답이 여러 개가 되면 안 된다. 끝까지 스스로 검산해 정답이 유일하고 정확함을 보장한다. ★난도는 사고의 깊이로만 올리고 과목 범위는 절대 넘지 않는다."
+};
+
+// ---- 검증(2차 점검) 시스템 지시문 ----
+const VERIFY_SYSTEM = `너는 수학 문항과 풀이를 깐깐하게 검토하는 '검토자'다. 아래 [점검 대상]을 직접 처음부터 끝까지 다시 풀어보며 점검하라. 출제자의 풀이를 그대로 믿지 말고 네가 독립적으로 계산해 대조하라.
+다음 네 항목을 각각 판정한다.
+1) [정답 일치] 적힌 정답과 풀이의 최종 결론이 같은가. 다르면 어느 쪽이 맞는지 직접 풀어 밝힌다.
+2) [범위 적합] (과목 범위가 주어지면) 문항과 풀이가 그 범위 안의 개념·공식만 쓰는가. 범위 밖 개념(예: 대수에서 삼각함수의 덧셈정리)을 썼으면 정확히 지적한다.
+3) [문제 타당] 문제가 조건 누락·모순 없이 명확히 정의되어 실제로 풀리는가. 답이 유일한가.
+4) [계산 정확] 계산·논리 오류가 있는가. 직접 검산해 확인한다.
+
+출력 형식(이 형식만, 군더더기 없이):
+[정답 일치] ✅ 또는 ⚠ — (⚠이면 무엇이 틀렸고 올바른 값/방향은 무엇인지 1~2줄)
+[범위 적합] ✅ 또는 ⚠ — (해당 없으면 '범위 정보 없음')
+[문제 타당] ✅ 또는 ⚠
+[계산 정확] ✅ 또는 ⚠
+한 줄 총평: (모두 ✅면 '이상 없음', 아니면 가장 중요한 수정 1가지)
+
+수식은 LaTeX/마크다운 없이 HWP에 붙는 평문으로만 쓴다.`;
 
 // ---- Gemini 호출 ----
 async function callGemini(systemText, parts) {
@@ -504,6 +539,7 @@ if (!getGeminiKey()) openSettings();
 let pendingImage = null;
 let resultMode = null;
 let lastLabel = "";
+let lastScope = "";   // 검증용: 마지막 출제의 과목 범위
 let currentResult = "";
 
 const tabs = document.querySelectorAll(".tab");
@@ -526,8 +562,12 @@ function showResult(text, mode) {
   currentResult = text || ""; resultMode = mode;
   $("resultText").textContent = currentResult;
   $("resultBox").classList.remove("hidden");
-  $("saveBtn").classList.toggle("hidden", mode !== "solve");
+  $("saveBtn").classList.remove("hidden");          // 출제·풀이 모두 저장 가능
   $("saveBtn").textContent = "보관함에 저장";
+  $("verifyBtn").classList.remove("hidden");         // 2차 점검 버튼
+  $("verifyBtn").textContent = "AI 검증";
+  $("verifyBox").classList.add("hidden");            // 새 결과마다 이전 검증 결과 숨김
+  $("verifyText").textContent = "";
   $("resultBox").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
@@ -535,17 +575,25 @@ $("genBtn").addEventListener("click", async () => {
   const btn = $("genBtn");
   const subj = $("subject").value === "직접 입력" ? $("customSubject").value.trim() : $("subject").value;
   const qtype = $("qtype").value;
+  const diff = $("difficulty").value;
+  const cnt = $("count").value;
+  const topic = $("topic").value.trim();
   const scope = SUBJECT_SCOPE[subj];
   const scopeLine = scope ? ("- 과목 범위(반드시 이 안에서만 출제·풀이하고, 범위 밖 개념·공식은 쓰지 말 것): " + scope + "\n") : "";
+  const diffLine = DIFFICULTY_GUIDE[diff] ? ("- 난이도 지침: " + DIFFICULTY_GUIDE[diff] + "\n") : "";
   const prompt =
     "다음 조건으로 수학 문항을 만들어줘.\n" +
     "- 과목/단원: " + (subj || "(미지정)") + "\n" +
     scopeLine +
-    "- 세부 주제: " + ($("topic").value.trim() || "(자유)") + "\n" +
-    "- 난이도: " + $("difficulty").value + "\n" +
+    "- 세부 주제: " + (topic || "(자유)") + "\n" +
+    "- 난이도: " + diff + "\n" +
+    diffLine +
     "- 유형: " + qtype + "\n" +
-    "- 개수: " + $("count").value + "개\n\n" +
+    "- 개수: " + cnt + "개\n\n" +
     "각 문항에 정답과 풀이를 함께 줘." + (qtype === "서술형" ? " 서술형이므로 배점 포함 채점기준도 함께." : "");
+  // 보관·검증용 메타 기록
+  lastLabel = (subj || "문항") + " · " + diff + " · " + qtype + (topic ? " · " + topic : "") + " (" + cnt + "문항)";
+  lastScope = scope || "";
   btn.disabled = true; btn.textContent = "만드는 중…";
   const out = await callGemini(GEN_SYSTEM, [{ text: prompt }]);
   btn.disabled = false; btn.textContent = "문항 만들기";
@@ -572,6 +620,7 @@ $("solveBtn").addEventListener("click", async () => {
   const problem = $("problem").value.trim();
   if (!problem && !pendingImage) { alert("문제를 입력하거나 사진을 올려주세요."); return; }
   lastLabel = problem ? problem.replace(/\s+/g, " ").slice(0, 40) : "사진 문제";
+  lastScope = "";  // 풀이 모드는 과목 범위 정보 없음
   let parts;
   if (pendingImage) {
     parts = [{ inline_data: { mime_type: pendingImage.mime, data: pendingImage.base64 } },
@@ -595,11 +644,26 @@ $("saveBtn").addEventListener("click", async () => {
   if (!currentResult) return;
   $("saveBtn").textContent = "저장 중…";
   const now = new Date().toLocaleString("ko-KR", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+  const kind = resultMode === "create" ? "출제" : "풀이";
   try {
-    await saveItem({ label: lastLabel || "문제 풀이", result: currentResult, savedAt: now });
+    await saveItem({ kind: kind, label: lastLabel || (kind === "출제" ? "출제 문항" : "문제 풀이"), result: currentResult, savedAt: now });
     $("saveBtn").textContent = "저장됨 ✓";
     setTimeout(() => $("saveBtn").textContent = "보관함에 저장", 1600);
   } catch (e) { $("saveBtn").textContent = "보관함에 저장"; alert("저장 실패: " + e.message); }
+});
+
+// ---- AI 2차 점검(검증) ----
+$("verifyBtn").addEventListener("click", async () => {
+  if (!currentResult) return;
+  const btn = $("verifyBtn");
+  btn.disabled = true; btn.textContent = "점검 중…";
+  $("verifyBox").classList.remove("hidden");
+  $("verifyText").textContent = "AI가 다시 풀어보며 점검하는 중…";
+  const scopeBlock = lastScope ? ("[과목 범위]\n" + lastScope + "\n\n") : "";
+  const parts = [{ text: scopeBlock + "[점검 대상]\n" + currentResult }];
+  const out = await callGemini(VERIFY_SYSTEM, parts);
+  btn.disabled = false; btn.textContent = "AI 검증";
+  $("verifyText").textContent = (out && out !== null) ? out : "점검 결과를 받지 못했어요.";
 });
 
 async function renderShelf() {
@@ -608,7 +672,7 @@ async function renderShelf() {
   let items = [];
   try { items = await listItems(); } catch (e) { wrap.innerHTML = '<div class="shelfEmpty">불러오기 실패: ' + e.message + '</div>'; return; }
   if (!items.length) {
-    wrap.innerHTML = '<div class="shelfEmpty">아직 저장한 풀이가 없어요.<br>풀이·해설 탭에서 결과를 만든 뒤 “보관함에 저장”을 누르면 여기에 쌓여요.</div>';
+    wrap.innerHTML = '<div class="shelfEmpty">아직 저장한 항목이 없어요.<br>출제·풀이 결과를 만든 뒤 “보관함에 저장”을 누르면 여기에 쌓여요.</div>';
     return;
   }
   wrap.innerHTML = "";
@@ -622,7 +686,12 @@ async function renderShelf() {
       '<button class="shelfBtn act-copy">복사</button>' +
       '<button class="shelfBtn act-del" style="color:#b3433a">삭제</button></div></div>' +
       '<div class="shelfBody hidden"></div>';
-    card.querySelector(".shelfLabel").textContent = it.label || "문제 풀이";
+    const kind = it.kind || "풀이";
+    const badgeCls = kind === "출제" ? "create" : "solve";
+    const labelEl = card.querySelector(".shelfLabel");
+    labelEl.innerHTML = '<span class="shelfKind ' + badgeCls + '"></span>';
+    labelEl.querySelector(".shelfKind").textContent = kind;
+    labelEl.appendChild(document.createTextNode(it.label || (kind === "출제" ? "출제 문항" : "문제 풀이")));
     card.querySelector(".shelfBody").textContent = it.result || "";
     card.querySelector(".act-open").addEventListener("click", () => {
       const body = card.querySelector(".shelfBody");
