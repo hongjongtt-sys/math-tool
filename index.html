@@ -265,12 +265,23 @@ async function removeItem(id) {
 
 // ---- 시스템 지시문 ----
 const GEN_SYSTEM = `너는 대한민국 고등학교 수학 교사를 돕는 '출제 보조'다. 2022 개정 교육과정 기준으로 문항을 만든다.
-- 요청한 단원/난이도/유형/개수에 정확히 맞춘다.
-- 각 문항마다 본문 → 정답 → 검산 가능한 간단 풀이를 함께 준다.
+- 요청한 단원/난이도/유형/개수에 정확히 맞춘다. 요청한 개수만큼 빠짐없이 만든다.
+- 난이도 '상'·'최상'이면 단순 대입이 아니라 두세 개념을 엮은, 사고 단계가 여러 개인 문항으로 만든다. 절대 쉽게 내지 마라.
+- 각 문항마다 본문 → 정답 → 검산 가능한 풀이를 함께 준다.
 - 객관식이면 흔한 오개념에서 나오는 매력적인 오답으로 선택지를 설계한다.
 - 서술형이면 배점 포함 단계별 채점기준을 제시한다.
 - 계산과 논리를 스스로 한 번 더 검산하고, 확신이 낮으면 '※ 검토 필요'를 단다.
-- HWP에 붙여넣기 좋게 마크다운 기호는 최소화한 평문으로 쓰고, 수식은 a_n=a_1+(n-1)d, x^2, log_2(8) 처럼 일반 텍스트로. 문항마다 ────── 로 구분한다.`;
+- 문항마다 ────── 로 구분한다.
+
+[수식 표기 — 반드시 지킬 것]
+- LaTeX 절대 금지. \\(, \\), $, \\cos, \\frac, \\ge, \\sqrt, ^{ } 같은 기호를 절대 쓰지 마라.
+- 한글(HWP)에 붙여넣어 바로 읽히는 일반 텍스트로만 쓴다. 예시:
+  · 거듭제곱: cos^2 x 가 아니라 (cos x)^2 또는 cos²x 로. x²,  x³
+  · 분수: 2분의 1 → 1/2,  n분의 1 → 1/n
+  · 그리스문자/기호: π, ≤, ≥, ≠, √, ±, ∞, Σ, ∫ 같은 실제 기호 문자를 그대로
+  · 삼각함수: sin x, cos x, tan x  (sinx 처럼 붙이지 말고 띄어쓰기)
+  · 로그: log_2(8) 또는 log₂8
+  · 수열: a_n = a_1 + (n-1)d`;
 
 const SOLVE_SYSTEM = `너는 대한민국 고등학교 수학 교사를 돕는 '풀이·해설 보조'다.
 - 사진으로 문제를 받으면 먼저 문제를 정확히 옮겨 적고 무엇을 구하는지 한 줄로 확인한 뒤 푼다.
@@ -278,7 +289,12 @@ const SOLVE_SYSTEM = `너는 대한민국 고등학교 수학 교사를 돕는 '
 - 학생들이 자주 하는 오개념·실수 포인트를 따로 짚는다.
 - 계산을 스스로 검산하고, 애매하면 '※ 검토 필요'를 명시한다. 절대 틀린 답을 자신 있게 말하지 않는다.
 - 마지막에 수업용 설명 포인트 한 줄을 덧붙인다.
-- HWP에 붙여넣기 좋게 깔끔한 평문, 수식은 일반 텍스트로.`;
+
+[수식 표기 — 반드시 지킬 것]
+- LaTeX 절대 금지. \\(, \\), $, \\cos, \\frac, \\ge, \\sqrt, ^{ } 같은 기호를 절대 쓰지 마라.
+- 한글(HWP)에 붙여넣어 바로 읽히는 일반 텍스트로만 쓴다.
+  · 거듭제곱: x², x³, (cos x)²   · 분수: 1/2, 1/n   · 기호: π, ≤, ≥, ≠, √, ±, Σ, ∫
+  · 삼각함수는 sin x, cos x 처럼 띄어쓰기   · 로그: log_2(8) 또는 log₂8`;
 
 // ---- Gemini 호출 ----
 async function callGemini(systemText, parts) {
@@ -288,7 +304,7 @@ async function callGemini(systemText, parts) {
   const body = {
     system_instruction: { parts: [{ text: systemText }] },
     contents: [{ role: "user", parts: parts }],
-    generationConfig: { maxOutputTokens: 2048, temperature: 0.7 }
+    generationConfig: { maxOutputTokens: 8192, temperature: 0.7 }
   };
   try {
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
