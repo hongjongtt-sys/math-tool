@@ -194,7 +194,7 @@
     </div>
   </div>
 
-  <div class="footer">⚠ 수학은 AI가 계산·논리를 틀릴 때가 있어요. 초안으로 쓰되 최종 검산은 직접 해주세요.</div>
+  <div class="footer">⚠ 수학은 AI가 계산·논리를 틀릴 때가 있어요. 초안으로 쓰되 최종 검산은 직접 해주세요. · 수식은 HWP에 바로 붙도록 평문으로 변환됩니다.</div>
 </div>
 
 <script>
@@ -219,6 +219,116 @@ function parseFirebaseConfig(text) {
     if (m) cfg[k] = m[1];
   });
   return (cfg.apiKey && cfg.projectId) ? cfg : null;
+}
+
+// ============================================================
+//  수식 평문화 (HWP 붙여넣기용)
+//  - 모델이 지시를 어기고 LaTeX/마크다운을 흘려도 여기서 평문으로 강제 변환
+// ============================================================
+function toPlainMath(s) {
+  if (!s) return s;
+  let t = s;
+
+  // 0) LaTeX 줄바꿈
+  t = t.replace(/\\\\/g, "\n");
+
+  // 1) 수식 구분자 제거(내용만 남김)
+  t = t.replace(/\$\$([\s\S]*?)\$\$/g, "$1");
+  t = t.replace(/\\\[([\s\S]*?)\\\]/g, "$1");
+  t = t.replace(/\\\(([\s\S]*?)\\\)/g, "$1");
+  t = t.replace(/\$([^$\n]*?)\$/g, "$1");
+
+  // 2) 90^\circ → 90°  (도 기호: 일반 \circ 변환보다 먼저)
+  t = t.replace(/\^\s*\{?\s*\\circ\s*\}?/g, "°");
+
+  // 3) 래퍼류는 안쪽 내용만 남김
+  t = t.replace(/\\(?:text|mathrm|mathbf|mathit|mathsf|mathcal|mathbb|operatorname|boxed|overline|underline|overrightarrow|overleftarrow|hat|widehat|bar|vec|tilde|dot|ddot)\s*\{([^{}]*)\}/g, "$1");
+
+  // 4) \left \right 제거
+  t = t.replace(/\\left\s*/g, "").replace(/\\right\s*/g, "");
+
+  // 5) 조합 \binom{n}{k} → C(n, k)
+  t = t.replace(/\\(?:d|t)?binom\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, "C($1, $2)");
+
+  // 6) 분수 \frac{a}{b} → (a)/(b)  (중첩 대비 반복)
+  for (let i = 0; i < 6; i++) {
+    const before = t;
+    t = t.replace(/\\[dt]?frac\s*\{([^{}]*)\}\s*\{([^{}]*)\}/g, function (m, a, b) {
+      const A = /^[A-Za-z0-9π]+$/.test(a) ? a : "(" + a + ")";
+      const B = /^[A-Za-z0-9π]+$/.test(b) ? b : "(" + b + ")";
+      return A + "/" + B;
+    });
+    if (t === before) break;
+  }
+
+  // 7) 근호 \sqrt
+  t = t.replace(/\\sqrt\s*\[([^\]]*)\]\s*\{([^{}]*)\}/g, "($2)^(1/$1)");
+  for (let i = 0; i < 4; i++) {
+    const before = t;
+    t = t.replace(/\\sqrt\s*\{([^{}]*)\}/g, function (m, a) {
+      return /^[A-Za-z0-9π]+$/.test(a) ? "√" + a : "√(" + a + ")";
+    });
+    if (t === before) break;
+  }
+
+  // 8) 함수: 백슬래시만 제거
+  ["arcsin","arccos","arctan","sinh","cosh","tanh","sin","cos","tan","cot","sec","csc",
+   "log","ln","exp","limsup","liminf","lim","max","min","sup","inf","det","gcd","lcm","mod"]
+    .forEach(function (f) { t = t.replace(new RegExp("\\\\" + f + "\\b", "g"), f); });
+
+  // 9) 그리스문자·연산자·관계기호 → 유니코드
+  const MAP = {
+    alpha:"α",beta:"β",gamma:"γ",delta:"δ",epsilon:"ε",varepsilon:"ε",zeta:"ζ",eta:"η",
+    theta:"θ",vartheta:"θ",iota:"ι",kappa:"κ",lambda:"λ",mu:"μ",nu:"ν",xi:"ξ",pi:"π",
+    rho:"ρ",sigma:"σ",tau:"τ",upsilon:"υ",phi:"φ",varphi:"φ",chi:"χ",psi:"ψ",omega:"ω",
+    Gamma:"Γ",Delta:"Δ",Theta:"Θ",Lambda:"Λ",Xi:"Ξ",Pi:"Π",Sigma:"Σ",Phi:"Φ",Psi:"Ψ",Omega:"Ω",
+    times:"×",div:"÷",cdot:"·",pm:"±",mp:"∓",
+    leqslant:"≤",geqslant:"≥",leq:"≤",le:"≤",geq:"≥",ge:"≥",neq:"≠",ne:"≠",
+    approx:"≈",equiv:"≡",sim:"∼",cong:"≅",propto:"∝",ll:"≪",gg:"≫",
+    infty:"∞",partial:"∂",nabla:"∇",
+    sum:"Σ",prod:"∏",int:"∫",oint:"∮",
+    longrightarrow:"→",rightarrow:"→",leftrightarrow:"↔",Leftrightarrow:"⇔",Rightarrow:"⇒",
+    mapsto:"↦",implies:"⇒",iff:"⇔",to:"→",
+    in:"∈",notin:"∉",ni:"∋",subseteq:"⊆",subset:"⊂",supseteq:"⊇",supset:"⊃",
+    cup:"∪",cap:"∩",emptyset:"∅",varnothing:"∅",forall:"∀",exists:"∃",neg:"¬",
+    angle:"∠",triangle:"△",perp:"⊥",parallel:"∥",mid:"|",
+    circ:"∘",deg:"°",degree:"°",prime:"′",
+    cdots:"⋯",ldots:"…",dots:"…",vdots:"⋮"
+  };
+  Object.keys(MAP).forEach(function (k) {
+    t = t.replace(new RegExp("\\\\" + k + "\\b", "g"), MAP[k]);
+  });
+
+  // 10) 간격 명령
+  t = t.replace(/\\quad/g, "  ").replace(/\\qquad/g, "    ").replace(/\\[,;:! ]/g, " ");
+
+  // 11) 위/아래 첨자 → 유니코드(가능할 때), 아니면 ^( )·_( )
+  const SUP = {"0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹",
+    "+":"⁺","-":"⁻","=":"⁼","(":"⁽",")":"⁾","n":"ⁿ","i":"ⁱ"};
+  const SUB = {"0":"₀","1":"₁","2":"₂","3":"₃","4":"₄","5":"₅","6":"₆","7":"₇","8":"₈","9":"₉",
+    "+":"₊","-":"₋","=":"₌","(":"₍",")":"₎","a":"ₐ","e":"ₑ","o":"ₒ","x":"ₓ","n":"ₙ","i":"ᵢ"};
+  function uni(str, m) { let o = ""; for (const ch of str) { if (m[ch] === undefined) return null; o += m[ch]; } return o; }
+
+  t = t.replace(/\^\{([^{}]*)\}/g, function (mm, a) { const u = uni(a, SUP); return u !== null ? u : "^(" + a + ")"; });
+  t = t.replace(/_\{([^{}]*)\}/g,  function (mm, a) { const u = uni(a, SUB); return u !== null ? u : "_(" + a + ")"; });
+  t = t.replace(/\^([0-9A-Za-z+\-])/g, function (mm, a) { const u = uni(a, SUP); return u !== null ? u : "^" + a; });
+  t = t.replace(/_([0-9A-Za-z+\-])/g,  function (mm, a) { const u = uni(a, SUB); return u !== null ? u : "_" + a; });
+
+  // 12) 이스케이프된 특수문자 (\% \& \# 등)
+  t = t.replace(/\\([%&#$])/g, "$1");
+
+  // 13) 남은 미지의 백슬래시 명령은 백슬래시만 제거 (잔여 LaTeX 방지)
+  t = t.replace(/\\([a-zA-Z]+)/g, "$1");
+
+  // 14) 마크다운 잔재 정리 (HWP 평문화)
+  t = t.replace(/\*\*([^*]+)\*\*/g, "$1");   // **굵게**
+  t = t.replace(/`([^`]+)`/g, "$1");         // `인라인 코드`
+  t = t.replace(/^#{1,6}\s+/gm, "");          // # 제목
+
+  // 15) 마무리: 과한 빈 줄·줄 끝 공백 정리
+  t = t.replace(/[ \t]+\n/g, "\n").replace(/\n{3,}/g, "\n\n");
+
+  return t.trim();
 }
 
 // ---- Firebase 초기화 (설정값 있으면 클라우드, 없으면 이 기기 저장) ----
@@ -275,6 +385,7 @@ const GEN_SYSTEM = `너는 대한민국 고등학교 수학 교사를 돕는 '�
 
 [수식 표기 — 반드시 지킬 것]
 - LaTeX 절대 금지. \\(, \\), $, \\cos, \\frac, \\ge, \\sqrt, ^{ } 같은 기호를 절대 쓰지 마라.
+- 마크다운 강조(**굵게**), 머리말(#), 코드 백틱(\`)도 쓰지 마라. 그냥 평문으로 써라.
 - 한글(HWP)에 붙여넣어 바로 읽히는 일반 텍스트로만 쓴다. 예시:
   · 거듭제곱: cos^2 x 가 아니라 (cos x)^2 또는 cos²x 로. x²,  x³
   · 분수: 2분의 1 → 1/2,  n분의 1 → 1/n
@@ -292,6 +403,7 @@ const SOLVE_SYSTEM = `너는 대한민국 고등학교 수학 교사를 돕는 '
 
 [수식 표기 — 반드시 지킬 것]
 - LaTeX 절대 금지. \\(, \\), $, \\cos, \\frac, \\ge, \\sqrt, ^{ } 같은 기호를 절대 쓰지 마라.
+- 마크다운 강조(**굵게**), 머리말(#), 코드 백틱(\`)도 쓰지 마라. 그냥 평문으로 써라.
 - 한글(HWP)에 붙여넣어 바로 읽히는 일반 텍스트로만 쓴다.
   · 거듭제곱: x², x³, (cos x)²   · 분수: 1/2, 1/n   · 기호: π, ≤, ≥, ≠, √, ±, Σ, ∫
   · 삼각함수는 sin x, cos x 처럼 띄어쓰기   · 로그: log_2(8) 또는 log₂8`;
@@ -312,7 +424,8 @@ async function callGemini(systemText, parts) {
     if (data.error) return "오류: " + data.error.message;
     const out = ((data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [])
       .map(p => p.text || "").join("\n").trim();
-    return out || "응답을 받지 못했어요.";
+    if (!out) return "응답을 받지 못했어요.";
+    return toPlainMath(out); // ← HWP 평문화 후처리
   } catch (e) { return "연결에 문제가 생겼어요. 잠시 후 다시 시도해주세요."; }
 }
 
