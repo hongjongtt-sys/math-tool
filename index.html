@@ -6,7 +6,7 @@
 <title>수학 출제 · 해설 도구</title>
 <link href="https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@400;700&family=Noto+Sans+KR:wght@400;500;700&display=swap" rel="stylesheet" />
 
-<!-- Firebase (보관함 기기 연동용). 설정을 안 넣으면 자동으로 localStorage로 동작. -->
+<!-- Firebase (보관함 기기 연동용) -->
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
@@ -24,9 +24,23 @@
   .kicker { font-size:12px; letter-spacing:2px; color:#8a93a8; font-weight:700; margin-bottom:6px; }
   h1 { font-family:'Gowun Batang',serif; font-size:28px; font-weight:700; color:#22293a; margin:0; line-height:1.1; }
   .subtitle { font-size:13.5px; color:#5f6678; margin:8px 0 0; }
-  .dot { width:16px; height:16px; border-radius:50%; margin-top:6px; background:var(--c);
-    box-shadow:0 0 0 4px #fff,0 0 0 5px #e3e7ef; }
   .mode { font-size:11px; color:#9aa2b5; margin-top:6px; }
+  .gear { background:#fff; border:1px solid #d3d9e4; border-radius:9px; padding:7px 11px;
+    font-size:15px; cursor:pointer; }
+  .settings { background:#f7f9fc; border-bottom:1px solid #e3e7ef; padding:18px 28px; }
+  .settings.hidden { display:none; }
+  .settings h3 { margin:0 0 4px; font-size:14px; color:#22293a; }
+  .settings .desc { font-size:12px; color:#7c869b; margin:0 0 14px; line-height:1.5; }
+  .settings label { display:block; font-size:12.5px; font-weight:700; color:#6b7385; margin:10px 0 5px; }
+  .settings input, .settings textarea { width:100%; font-family:inherit; font-size:13px; padding:10px 12px;
+    border-radius:9px; border:1px solid #ccd3e0; background:#fff; color:#22293a; outline:none; }
+  .settings textarea { min-height:120px; resize:vertical; line-height:1.45; }
+  .settings .saveRow { display:flex; align-items:center; gap:10px; margin-top:14px; }
+  .settings .saveBtn { font-family:inherit; font-size:13.5px; font-weight:700; color:#fff; background:var(--c);
+    border:none; border-radius:9px; padding:10px 18px; cursor:pointer; }
+  .settings .hint { font-size:11.5px; color:#9aa2b5; }
+  .stat { font-size:11.5px; margin-top:6px; }
+  .stat.ok { color:#2e7d32; } .stat.no { color:#b3433a; }
   .tabs { display:flex; gap:8px; padding:14px 28px 4px; flex-wrap:wrap; }
   .tab { font-family:inherit; font-size:14px; font-weight:700; padding:9px 16px; border-radius:999px;
     border:1px solid #d8cfbe; background:transparent; color:#5b5347; cursor:pointer; transition:all .15s; }
@@ -38,9 +52,9 @@
   .col { flex:1; display:flex; flex-direction:column; gap:5px; }
   .colSmall { width:78px; display:flex; flex-direction:column; gap:5px; }
   label.lbl { font-size:12.5px; font-weight:700; color:#6b7385; }
-  select, input.txt, textarea { font-family:inherit; font-size:14px; padding:10px 12px; border-radius:9px;
+  select, input.txt, textarea.prob { font-family:inherit; font-size:14px; padding:10px 12px; border-radius:9px;
     border:1px solid #ccd3e0; background:#fff; color:#22293a; outline:none; }
-  textarea { min-height:110px; resize:vertical; line-height:1.5; padding:12px; }
+  textarea.prob { min-height:110px; resize:vertical; line-height:1.5; padding:12px; }
   .solveBtns { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
   .attach { font-size:13.5px; padding:9px 14px; border-radius:9px; border:1px solid #ccd3e0;
     background:#fff; color:#3a4257; cursor:pointer; font-family:inherit; }
@@ -82,7 +96,27 @@
       <p class="subtitle">문항을 만들고, 학평 문제 풀이를 빠르게 초안 잡아요.</p>
       <div class="mode" id="modeBadge"></div>
     </div>
-    <div class="dot"></div>
+    <button class="gear" id="gearBtn" title="설정">⚙</button>
+  </div>
+
+  <!-- 설정 (키·Firebase) : 값은 이 브라우저에만 저장됨 -->
+  <div class="settings hidden" id="settings">
+    <h3>설정 — 키 입력</h3>
+    <p class="desc">여기 입력한 값은 <b>이 브라우저(이 기기)에만</b> 저장돼요. 코드나 GitHub에는 올라가지 않습니다.
+      다른 기기(폰 등)에서 쓰려면 그 기기에서도 한 번 입력하면 돼요.</p>
+
+    <label>Gemini API 키</label>
+    <input id="setGemini" type="text" placeholder="AIza... (Google AI Studio에서 발급)" />
+    <div class="stat" id="statGemini"></div>
+
+    <label>Firebase 설정 (보관함 기기 연동 / 선택)</label>
+    <textarea id="setFirebase" placeholder="Firebase 콘솔에서 복사한 firebaseConfig = { ... } 블록을 통째로 붙여넣으세요. (비워두면 이 기기에만 저장됩니다)"></textarea>
+    <div class="stat" id="statFirebase"></div>
+
+    <div class="saveRow">
+      <button class="saveBtn" id="saveSettings">저장하고 적용</button>
+      <span class="hint">저장하면 페이지가 새로고침됩니다.</span>
+    </div>
   </div>
 
   <div class="tabs">
@@ -130,7 +164,7 @@
     <!-- 문제 풀이 -->
     <div class="panel hidden" id="panel-solve">
       <label class="lbl">문제 입력 (붙여넣기 또는 사진)</label>
-      <textarea id="problem" placeholder="문제 본문을 붙여넣거나, 아래 버튼으로 문제 사진을 올려주세요."></textarea>
+      <textarea class="prob" id="problem" placeholder="문제 본문을 붙여넣거나, 아래 버튼으로 문제 사진을 올려주세요."></textarea>
       <div class="solveBtns">
         <input type="file" id="fileInput" accept="image/*" class="hidden" />
         <button class="attach" id="attachBtn">📷 문제 사진 올리기</button>
@@ -164,65 +198,67 @@
 </div>
 
 <script>
-/* ====================================================================== */
-/*  ① Gemini API 키  —  Google AI Studio에서 발급받아 아래에 붙여넣기      */
-/*     (무료 등급이면 비용 0원. 키를 안 넣으면 AI 기능만 비활성화됨)        */
-/* ====================================================================== */
-const GEMINI_API_KEY = "AQ.Ab8RN6IEuMMpCY49mI72bEuhDA9lqaTAW2ueymouaqW_4CTaqQ";
-const MODEL = "gemini-2.5-flash";   // 무료 등급 모델. 필요시 gemini-2.5-flash-lite 등으로 변경 가능
+const MODEL = "gemini-2.5-flash"; // 무료 등급 모델. 필요시 gemini-2.5-flash-lite 등으로 변경 가능
 
-/* ====================================================================== */
-/*  ② Firebase 설정  —  Firebase 콘솔의 웹앱 설정값을 아래에 붙여넣기      */
-/*     (안 넣으면 이 기기 안에서만 저장(localStorage). 넣으면 기기 연동)   */
-/* ====================================================================== */
-const FIREBASE_CONFIG = {
-  apiKey: "여기에_FIREBASE_apiKey",
-  authDomain: "여기에_FIREBASE_authDomain",
-  projectId: "여기에_FIREBASE_projectId",
-  storageBucket: "여기에_FIREBASE_storageBucket",
-  messagingSenderId: "여기에_FIREBASE_messagingSenderId",
-  appId: "여기에_FIREBASE_appId"
-};
-/* ====================================================================== */
+// ---- 설정값을 localStorage에서 읽기 (코드에 비밀값 없음) ----
+const LS_GEMINI = "mt_geminiKey";
+const LS_FB = "mt_firebaseConfig";
+const LS_SHELF = "mt_shelf";
 
-// ---- 저장소 설정 (Firebase 채워졌으면 Firestore, 아니면 localStorage) ----
-const useLocal = FIREBASE_CONFIG.apiKey.indexOf("여기에") === 0;
-let db = null;
-if (!useLocal) {
-  try { firebase.initializeApp(FIREBASE_CONFIG); db = firebase.firestore(); }
-  catch (e) { console.error(e); }
+function getGeminiKey() { try { return localStorage.getItem(LS_GEMINI) || ""; } catch (e) { return ""; } }
+function getFirebaseConfig() {
+  try { const s = localStorage.getItem(LS_FB); return s ? JSON.parse(s) : null; } catch (e) { return null; }
 }
-document.getElementById("modeBadge").textContent =
-  useLocal ? "저장: 이 기기 (Firebase 미설정)" : "저장: 클라우드 연동 (Firebase)";
 
-const LS_KEY = "mathToolShelf";
+// 붙여넣은 firebaseConfig 텍스트에서 값 추출
+function parseFirebaseConfig(text) {
+  const keys = ["apiKey","authDomain","projectId","storageBucket","messagingSenderId","appId"];
+  const cfg = {};
+  keys.forEach(k => {
+    const m = text.match(new RegExp(k + "\\s*:\\s*[\"']([^\"']+)[\"']"));
+    if (m) cfg[k] = m[1];
+  });
+  return (cfg.apiKey && cfg.projectId) ? cfg : null;
+}
 
+// ---- Firebase 초기화 (설정값 있으면 클라우드, 없으면 이 기기 저장) ----
+let db = null;
+let useLocal = true;
+const fbCfg = getFirebaseConfig();
+if (fbCfg) {
+  try { firebase.initializeApp(fbCfg); db = firebase.firestore(); useLocal = false; }
+  catch (e) { console.error(e); useLocal = true; }
+}
+
+function $(id) { return document.getElementById(id); }
+
+function refreshBadge() {
+  $("modeBadge").textContent = useLocal
+    ? "저장: 이 기기 (Firebase 미설정)"
+    : "저장: 클라우드 연동 (Firebase)";
+}
+refreshBadge();
+
+// ---- 보관함 저장소 ----
 async function listItems() {
-  if (useLocal) {
-    try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch (e) { return []; }
-  }
+  if (useLocal) { try { return JSON.parse(localStorage.getItem(LS_SHELF) || "[]"); } catch (e) { return []; } }
   const snap = await db.collection("solutions").orderBy("createdAt", "desc").get();
   return snap.docs.map(d => Object.assign({ id: d.id }, d.data()));
 }
 async function saveItem(item) {
   if (useLocal) {
-    let arr = [];
-    try { arr = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch (e) {}
+    let arr = []; try { arr = JSON.parse(localStorage.getItem(LS_SHELF) || "[]"); } catch (e) {}
     arr.unshift(Object.assign({ id: String(Date.now()) }, item));
-    localStorage.setItem(LS_KEY, JSON.stringify(arr));
-    return;
+    localStorage.setItem(LS_SHELF, JSON.stringify(arr)); return;
   }
   await db.collection("solutions").add(
-    Object.assign({}, item, { createdAt: firebase.firestore.FieldValue.serverTimestamp() })
-  );
+    Object.assign({}, item, { createdAt: firebase.firestore.FieldValue.serverTimestamp() }));
 }
 async function removeItem(id) {
   if (useLocal) {
-    let arr = [];
-    try { arr = JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch (e) {}
+    let arr = []; try { arr = JSON.parse(localStorage.getItem(LS_SHELF) || "[]"); } catch (e) {}
     arr = arr.filter(x => x.id !== id);
-    localStorage.setItem(LS_KEY, JSON.stringify(arr));
-    return;
+    localStorage.setItem(LS_SHELF, JSON.stringify(arr)); return;
   }
   await db.collection("solutions").doc(id).delete();
 }
@@ -246,11 +282,9 @@ const SOLVE_SYSTEM = `너는 대한민국 고등학교 수학 교사를 돕는 '
 
 // ---- Gemini 호출 ----
 async function callGemini(systemText, parts) {
-  if (GEMINI_API_KEY.indexOf("여기에") === 0) {
-    alert("먼저 코드 상단에 Gemini API 키를 넣어주세요.");
-    return null;
-  }
-  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent?key=" + GEMINI_API_KEY;
+  const key = getGeminiKey();
+  if (!key) { alert("먼저 오른쪽 위 ⚙ 설정에서 Gemini API 키를 입력해주세요."); openSettings(); return null; }
+  const url = "https://generativelanguage.googleapis.com/v1beta/models/" + MODEL + ":generateContent?key=" + key;
   const body = {
     system_instruction: { parts: [{ text: systemText }] },
     contents: [{ role: "user", parts: parts }],
@@ -263,20 +297,49 @@ async function callGemini(systemText, parts) {
     const out = ((data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [])
       .map(p => p.text || "").join("\n").trim();
     return out || "응답을 받지 못했어요.";
-  } catch (e) {
-    return "연결에 문제가 생겼어요. 잠시 후 다시 시도해주세요.";
-  }
+  } catch (e) { return "연결에 문제가 생겼어요. 잠시 후 다시 시도해주세요."; }
 }
 
+// ---- 설정 패널 ----
+function openSettings() {
+  $("settings").classList.remove("hidden");
+  $("setGemini").value = getGeminiKey();
+  const cfg = getFirebaseConfig();
+  $("setFirebase").value = cfg ? JSON.stringify(cfg, null, 2) : "";
+  $("statGemini").textContent = getGeminiKey() ? "✓ 입력됨" : "아직 입력 안 됨";
+  $("statGemini").className = "stat " + (getGeminiKey() ? "ok" : "no");
+  $("statFirebase").textContent = cfg ? "✓ 연동 설정됨" : "미설정 (이 기기에만 저장)";
+  $("statFirebase").className = "stat " + (cfg ? "ok" : "no");
+}
+$("gearBtn").addEventListener("click", () => {
+  $("settings").classList.toggle("hidden");
+  if (!$("settings").classList.contains("hidden")) openSettings();
+});
+$("saveSettings").addEventListener("click", () => {
+  const k = $("setGemini").value.trim();
+  if (k) localStorage.setItem(LS_GEMINI, k); else localStorage.removeItem(LS_GEMINI);
+
+  const fbText = $("setFirebase").value.trim();
+  if (fbText) {
+    const cfg = parseFirebaseConfig(fbText);
+    if (!cfg) { alert("Firebase 설정을 읽지 못했어요. 콘솔의 firebaseConfig = { ... } 블록을 통째로 붙여넣었는지 확인해주세요."); return; }
+    localStorage.setItem(LS_FB, JSON.stringify(cfg));
+  } else {
+    localStorage.removeItem(LS_FB);
+  }
+  alert("저장했어요. 페이지를 새로고침합니다.");
+  location.reload();
+});
+
+// 첫 방문(키 없음) 시 설정 자동 열기
+if (!getGeminiKey()) openSettings();
+
 // ---- UI 상태 ----
-let pendingImage = null;     // { base64, mime }
-let resultMode = null;       // 'create' | 'solve'
+let pendingImage = null;
+let resultMode = null;
 let lastLabel = "";
 let currentResult = "";
 
-function $(id) { return document.getElementById(id); }
-
-// 탭
 const tabs = document.querySelectorAll(".tab");
 tabs.forEach(t => t.addEventListener("click", () => {
   tabs.forEach(x => x.classList.remove("active"));
@@ -289,15 +352,12 @@ tabs.forEach(t => t.addEventListener("click", () => {
   if (k === "shelf") renderShelf();
 }));
 
-// 과목 직접 입력 토글
 $("subject").addEventListener("change", e => {
   $("customRow").classList.toggle("hidden", e.target.value !== "직접 입력");
 });
 
-// 결과 표시
 function showResult(text, mode) {
-  currentResult = text || "";
-  resultMode = mode;
+  currentResult = text || ""; resultMode = mode;
   $("resultText").textContent = currentResult;
   $("resultBox").classList.remove("hidden");
   $("saveBtn").classList.toggle("hidden", mode !== "solve");
@@ -305,7 +365,6 @@ function showResult(text, mode) {
   $("resultBox").scrollIntoView({ behavior: "smooth", block: "nearest" });
 }
 
-// 문항 만들기
 $("genBtn").addEventListener("click", async () => {
   const btn = $("genBtn");
   const subj = $("subject").value === "직접 입력" ? $("customSubject").value.trim() : $("subject").value;
@@ -324,7 +383,6 @@ $("genBtn").addEventListener("click", async () => {
   if (out !== null) showResult(out, "create");
 });
 
-// 사진 첨부
 $("attachBtn").addEventListener("click", () => $("fileInput").click());
 $("fileInput").addEventListener("change", e => {
   const file = e.target.files && e.target.files[0];
@@ -339,22 +397,16 @@ $("fileInput").addEventListener("change", e => {
   reader.readAsDataURL(file);
   e.target.value = "";
 });
-$("removeImg").addEventListener("click", () => {
-  pendingImage = null;
-  $("attachedTag").classList.add("hidden");
-});
+$("removeImg").addEventListener("click", () => { pendingImage = null; $("attachedTag").classList.add("hidden"); });
 
-// 풀이 만들기
 $("solveBtn").addEventListener("click", async () => {
   const problem = $("problem").value.trim();
   if (!problem && !pendingImage) { alert("문제를 입력하거나 사진을 올려주세요."); return; }
   lastLabel = problem ? problem.replace(/\s+/g, " ").slice(0, 40) : "사진 문제";
   let parts;
   if (pendingImage) {
-    parts = [
-      { inline_data: { mime_type: pendingImage.mime, data: pendingImage.base64 } },
-      { text: problem || "이 문제의 단계별 풀이와 해설을 만들어줘." }
-    ];
+    parts = [{ inline_data: { mime_type: pendingImage.mime, data: pendingImage.base64 } },
+             { text: problem || "이 문제의 단계별 풀이와 해설을 만들어줘." }];
   } else {
     parts = [{ text: "다음 문제의 단계별 풀이와 해설을 만들어줘.\n\n" + problem }];
   }
@@ -365,13 +417,11 @@ $("solveBtn").addEventListener("click", async () => {
   if (out !== null) showResult(out, "solve");
 });
 
-// 복사
 $("copyBtn").addEventListener("click", async () => {
   try { await navigator.clipboard.writeText(currentResult); $("copyBtn").textContent = "복사됨 ✓";
     setTimeout(() => $("copyBtn").textContent = "복사", 1500); } catch (e) {}
 });
 
-// 보관함 저장
 $("saveBtn").addEventListener("click", async () => {
   if (!currentResult) return;
   $("saveBtn").textContent = "저장 중…";
@@ -380,13 +430,9 @@ $("saveBtn").addEventListener("click", async () => {
     await saveItem({ label: lastLabel || "문제 풀이", result: currentResult, savedAt: now });
     $("saveBtn").textContent = "저장됨 ✓";
     setTimeout(() => $("saveBtn").textContent = "보관함에 저장", 1600);
-  } catch (e) {
-    $("saveBtn").textContent = "보관함에 저장";
-    alert("저장 실패: " + e.message);
-  }
+  } catch (e) { $("saveBtn").textContent = "보관함에 저장"; alert("저장 실패: " + e.message); }
 });
 
-// 보관함 렌더
 async function renderShelf() {
   const wrap = $("shelfList");
   wrap.innerHTML = '<div class="shelfEmpty">불러오는 중…</div>';
@@ -400,16 +446,12 @@ async function renderShelf() {
   items.forEach(it => {
     const card = document.createElement("div");
     card.className = "shelfItem";
-    const time = it.savedAt || "";
     card.innerHTML =
-      '<div class="shelfTop">' +
-        '<div class="shelfMeta"><div class="shelfLabel"></div><div class="shelfTime">' + time + '</div></div>' +
-        '<div class="shelfActions">' +
-          '<button class="shelfBtn act-open">펼치기</button>' +
-          '<button class="shelfBtn act-copy">복사</button>' +
-          '<button class="shelfBtn act-del" style="color:#b3433a">삭제</button>' +
-        '</div>' +
-      '</div>' +
+      '<div class="shelfTop"><div class="shelfMeta"><div class="shelfLabel"></div>' +
+      '<div class="shelfTime">' + (it.savedAt || "") + '</div></div>' +
+      '<div class="shelfActions"><button class="shelfBtn act-open">펼치기</button>' +
+      '<button class="shelfBtn act-copy">복사</button>' +
+      '<button class="shelfBtn act-del" style="color:#b3433a">삭제</button></div></div>' +
       '<div class="shelfBody hidden"></div>';
     card.querySelector(".shelfLabel").textContent = it.label || "문제 풀이";
     card.querySelector(".shelfBody").textContent = it.result || "";
@@ -419,12 +461,10 @@ async function renderShelf() {
       card.querySelector(".act-open").textContent = open ? "펼치기" : "접기";
     });
     card.querySelector(".act-copy").addEventListener("click", async () => {
-      try { await navigator.clipboard.writeText(it.result || ""); } catch (e) {}
-    });
+      try { await navigator.clipboard.writeText(it.result || ""); } catch (e) {} });
     card.querySelector(".act-del").addEventListener("click", async () => {
       if (!confirm("이 항목을 삭제할까요?")) return;
-      try { await removeItem(it.id); renderShelf(); } catch (e) { alert("삭제 실패: " + e.message); }
-    });
+      try { await removeItem(it.id); renderShelf(); } catch (e) { alert("삭제 실패: " + e.message); } });
     wrap.appendChild(card);
   });
 }
