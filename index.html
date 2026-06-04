@@ -550,8 +550,12 @@ tabs.forEach(t => t.addEventListener("click", () => {
   $("panel-create").classList.toggle("hidden", k !== "create");
   $("panel-solve").classList.toggle("hidden", k !== "solve");
   $("panel-shelf").classList.toggle("hidden", k !== "shelf");
-  if (k !== "shelf") $("resultBox").classList.add("hidden");
-  if (k === "shelf") renderShelf();
+  if (k === "shelf") {
+    $("resultBox").classList.add("hidden");   // 보관함에서만 결과 칸 숨김
+    renderShelf();
+  } else if (currentResult) {
+    $("resultBox").classList.remove("hidden"); // 출제·풀이 탭에선 마지막 결과 유지
+  }
 }));
 
 $("subject").addEventListener("change", e => {
