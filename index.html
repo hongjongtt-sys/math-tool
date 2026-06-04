@@ -72,7 +72,7 @@
   .smallBtn { font-family:inherit; font-size:12.5px; padding:5px 12px; border-radius:7px;
     border:1px solid #ccd3e0; background:#fff; color:#3a4257; cursor:pointer; }
   .resultText, .shelfBody { white-space:pre-wrap; font-size:14px; line-height:1.7; color:#2a3142; }
-  .resultText { padding:16px 18px; }
+  .resultText { padding:16px 18px; max-height:70vh; overflow:auto; }
   .shelfEmpty { text-align:center; color:#9aa2b5; font-size:13.5px; line-height:1.7; padding:36px 10px; }
   .shelfItem { background:#fff; border:1px solid #e3e7ef; border-radius:11px; overflow:hidden; margin-bottom:10px; }
   .shelfTop { display:flex; justify-content:space-between; align-items:center; gap:10px; padding:12px 14px; }
@@ -199,6 +199,12 @@
 
 <script>
 const MODEL = "gemini-2.5-flash"; // 무료 등급 모델. 필요시 gemini-2.5-flash-lite 등으로 변경 가능
+
+// ── 속도·길이 조절 ───────────────────────────────────────────
+// 2.5 Flash는 '사고(thinking)'가 기본 켜짐. 사고 토큰이 출력 한도를 같이 깎아
+// 풀이가 중간에 잘리고 느려진다. 아래 두 값으로 조절한다.
+const THINKING_BUDGET = 1024;     // 0=사고 끔(가장 빠름) · 숫자↑=정확↑·속도↓ · -1=자동
+const MAX_OUTPUT_TOKENS = 32768;  // 출력 길이 한도(넉넉히). 잘림 방지. 높여도 실제 생성한 만큼만 느려짐
 
 // ---- 설정값을 localStorage에서 읽기 (코드에 비밀값 없음) ----
 const LS_GEMINI = "mt_geminiKey";
@@ -416,16 +422,31 @@ async function callGemini(systemText, parts) {
   const body = {
     system_instruction: { parts: [{ text: systemText }] },
     contents: [{ role: "user", parts: parts }],
-    generationConfig: { maxOutputTokens: 8192, temperature: 0.7 }
+    generationConfig: {
+      maxOutputTokens: MAX_OUTPUT_TOKENS,
+      temperature: 0.7,
+      thinkingConfig: { thinkingBudget: THINKING_BUDGET } // ← 사고량 제한(잘림·느림 방지)
+    }
   };
   try {
     const res = await fetch(url, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
     const data = await res.json();
     if (data.error) return "오류: " + data.error.message;
-    const out = ((data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts) || [])
+    const cand = data.candidates && data.candidates[0];
+    const out = ((cand && cand.content && cand.content.parts) || [])
       .map(p => p.text || "").join("\n").trim();
-    if (!out) return "응답을 받지 못했어요.";
-    return toPlainMath(out); // ← HWP 평문화 후처리
+    const truncated = cand && cand.finishReason === "MAX_TOKENS";
+    if (!out) {
+      // 사고가 출력 한도를 다 먹어 본문이 비는 경우
+      return truncated
+        ? "사고(thinking)가 길어 본문이 비었어요. 코드 위쪽 THINKING_BUDGET을 0이나 더 작은 값으로 줄이거나, 개수를 줄여 다시 시도해주세요."
+        : "응답을 받지 못했어요.";
+    }
+    let result = toPlainMath(out); // ← HWP 평문화 후처리
+    if (truncated) {
+      result += "\n\n※ 출력 한도에 도달해 뒷부분이 잘렸을 수 있어요. 개수를 줄이거나, 코드 위쪽 MAX_OUTPUT_TOKENS를 올려 다시 시도해주세요.";
+    }
+    return result;
   } catch (e) { return "연결에 문제가 생겼어요. 잠시 후 다시 시도해주세요."; }
 }
 
