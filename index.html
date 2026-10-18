@@ -165,6 +165,17 @@
           <select id="count"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>5</option></select>
         </div>
       </div>
+      <div class="row">
+        <label class="lbl">개념 자료 (선택) — 교과서·정리 사진을 올리면 그 내용·범위에 맞춰 출제</label>
+        <div class="solveBtns">
+          <input type="file" id="conceptFileInput" accept="image/*" class="hidden" />
+          <button class="attach" id="conceptAttachBtn">📷 개념 사진 올리기</button>
+          <span class="attached hidden" id="conceptTag">
+            <img id="conceptThumb" alt="개념 자료" /> 첨부됨
+            <button class="x" id="removeConcept">✕</button>
+          </span>
+        </div>
+      </div>
       <button class="action" id="genBtn">문항 만들기</button>
     </div>
 
@@ -536,7 +547,8 @@ $("saveSettings").addEventListener("click", () => {
 if (!getGeminiKey()) openSettings();
 
 // ---- UI 상태 ----
-let pendingImage = null;
+let pendingImage = null;     // 풀이 탭: 문제 사진
+let pendingConcept = null;   // 출제 탭: 개념 자료 사진
 let resultMode = null;
 let lastLabel = "";
 let lastScope = "";   // 검증용: 마지막 출제의 과목 범위
@@ -594,15 +606,38 @@ $("genBtn").addEventListener("click", async () => {
     diffLine +
     "- 유형: " + qtype + "\n" +
     "- 개수: " + cnt + "개\n\n" +
+    (pendingConcept
+      ? "첨부한 사진은 수업에서 쓰는 개념 자료(교과서·정리 등)다. 이 자료에 나온 개념·정의·표기·접근법의 범위 안에서 출제하라. 자료에 없는 심화 개념을 끌어오지 말고, 자료가 다루는 내용으로 풀리는 문항을 만들어라. (위의 과목 범위 지침도 함께 지킨다.)\n\n"
+      : "") +
     "각 문항에 정답과 풀이를 함께 줘." + (qtype === "서술형" ? " 서술형이므로 배점 포함 채점기준도 함께." : "");
   // 보관·검증용 메타 기록
-  lastLabel = (subj || "문항") + " · " + diff + " · " + qtype + (topic ? " · " + topic : "") + " (" + cnt + "문항)";
+  lastLabel = (subj || "문항") + " · " + diff + " · " + qtype + (topic ? " · " + topic : "") + (pendingConcept ? " · 개념첨부" : "") + " (" + cnt + "문항)";
   lastScope = scope || "";
+  const parts = pendingConcept
+    ? [{ inline_data: { mime_type: pendingConcept.mime, data: pendingConcept.base64 } }, { text: prompt }]
+    : [{ text: prompt }];
   btn.disabled = true; btn.textContent = "만드는 중…";
-  const out = await callGemini(GEN_SYSTEM, [{ text: prompt }]);
+  const out = await callGemini(GEN_SYSTEM, parts);
   btn.disabled = false; btn.textContent = "문항 만들기";
   if (out !== null) showResult(out, "create");
 });
+
+// 개념 자료(출제용) 첨부
+$("conceptAttachBtn").addEventListener("click", () => $("conceptFileInput").click());
+$("conceptFileInput").addEventListener("change", e => {
+  const file = e.target.files && e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    const r = String(reader.result);
+    pendingConcept = { base64: r.split(",")[1], mime: file.type || "image/jpeg" };
+    $("conceptThumb").src = r;
+    $("conceptTag").classList.remove("hidden");
+  };
+  reader.readAsDataURL(file);
+  e.target.value = "";
+});
+$("removeConcept").addEventListener("click", () => { pendingConcept = null; $("conceptTag").classList.add("hidden"); });
 
 $("attachBtn").addEventListener("click", () => $("fileInput").click());
 $("fileInput").addEventListener("change", e => {
