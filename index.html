@@ -61,6 +61,12 @@
   .attached { display:inline-flex; align-items:center; gap:6px; font-size:12.5px; color:#5f6678; }
   .attached img { width:28px; height:28px; object-fit:cover; border-radius:5px; }
   .attached .x { border:none; background:transparent; color:#8a93a8; cursor:pointer; font-size:13px; }
+  .attached .pdfIcon { width:28px; height:28px; border-radius:5px; background:#c0392b; color:#fff; font-size:9.5px;
+    font-weight:700; display:inline-flex; align-items:center; justify-content:center; letter-spacing:.3px; }
+  .attached .pdfIcon.hidden, .attached img.hidden { display:none; }
+  .attached .fname { max-width:220px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .dropHint { font-size:11.5px; color:#9aa2b5; }
+  .panel.dragover { outline:2px dashed var(--c); outline-offset:6px; border-radius:10px; background:rgba(0,0,0,.015); }
   .action { font-family:inherit; font-size:15px; font-weight:700; color:#fff; border:none; border-radius:10px;
     padding:13px; cursor:pointer; margin-top:4px; background:var(--c); transition:background .15s; }
   .action:disabled { background:#9aa6bd; cursor:default; }
@@ -166,14 +172,16 @@
         </div>
       </div>
       <div class="row">
-        <label class="lbl">개념 자료 (선택) — 교과서·정리 사진을 올리면 그 내용·범위에 맞춰 출제</label>
+        <label class="lbl">개념 자료 (선택) — 교과서·정리 사진이나 PDF를 올리면 그 내용·범위에 맞춰 출제</label>
         <div class="solveBtns">
-          <input type="file" id="conceptFileInput" accept="image/*" class="hidden" />
-          <button class="attach" id="conceptAttachBtn">📷 개념 사진 올리기</button>
+          <input type="file" id="conceptFileInput" accept="image/*,application/pdf,.pdf" class="hidden" />
+          <button class="attach" id="conceptAttachBtn">📎 개념 자료 올리기 (사진·PDF)</button>
           <span class="attached hidden" id="conceptTag">
-            <img id="conceptThumb" alt="개념 자료" /> 첨부됨
+            <img id="conceptThumb" alt="개념 자료" /><span class="pdfIcon hidden" id="conceptPdf">PDF</span>
+            <span class="fname" id="conceptName">첨부됨</span>
             <button class="x" id="removeConcept">✕</button>
           </span>
+          <span class="dropHint" id="conceptHint">또는 스크린샷 Ctrl+V · 파일 끌어다 놓기</span>
         </div>
       </div>
       <button class="action" id="genBtn">문항 만들기</button>
@@ -181,15 +189,17 @@
 
     <!-- 문제 풀이 -->
     <div class="panel hidden" id="panel-solve">
-      <label class="lbl">문제 입력 (붙여넣기 또는 사진)</label>
-      <textarea class="prob" id="problem" placeholder="문제 본문을 붙여넣거나, 아래 버튼으로 문제 사진을 올려주세요."></textarea>
+      <label class="lbl">문제 입력 (붙여넣기 또는 사진·PDF)</label>
+      <textarea class="prob" id="problem" placeholder="문제 본문을 붙여넣거나, 아래 버튼으로 문제 사진·PDF를 올려주세요. 스크린샷은 Ctrl+V로 바로 붙여넣을 수 있어요."></textarea>
       <div class="solveBtns">
-        <input type="file" id="fileInput" accept="image/*" class="hidden" />
-        <button class="attach" id="attachBtn">📷 문제 사진 올리기</button>
+        <input type="file" id="fileInput" accept="image/*,application/pdf,.pdf" class="hidden" />
+        <button class="attach" id="attachBtn">📎 문제 올리기 (사진·PDF)</button>
         <span class="attached hidden" id="attachedTag">
-          <img id="attachedThumb" alt="첨부" /> 첨부됨
+          <img id="attachedThumb" alt="첨부" /><span class="pdfIcon hidden" id="attachedPdf">PDF</span>
+          <span class="fname" id="attachedName">첨부됨</span>
           <button class="x" id="removeImg">✕</button>
         </span>
+        <span class="dropHint" id="attachedHint">또는 스크린샷 Ctrl+V · 파일 끌어다 놓기</span>
       </div>
       <button class="action" id="solveBtn">풀이·해설 만들기</button>
     </div>
@@ -427,7 +437,7 @@ const GEN_SYSTEM = `너는 대한민국 고등학교 수학 교사를 돕는 '�
   · 수열: a_n = a_1 + (n-1)d`;
 
 const SOLVE_SYSTEM = `너는 대한민국 고등학교 수학 교사를 돕는 '풀이·해설 보조'다.
-- 사진으로 문제를 받으면 먼저 문제를 정확히 옮겨 적고 무엇을 구하는지 한 줄로 확인한 뒤 푼다.
+- 사진이나 PDF로 문제를 받으면 먼저 문제를 정확히 옮겨 적고 무엇을 구하는지 한 줄로 확인한 뒤 푼다.
 - 단계별로 풀되 각 단계의 근거(공식·정리)를 밝힌다.
 - 학생들이 자주 하는 오개념·실수 포인트를 따로 짚는다.
 - 계산을 스스로 검산하고, 애매하면 '※ 검토 필요'를 명시한다. 절대 틀린 답을 자신 있게 말하지 않는다.
@@ -607,7 +617,7 @@ $("genBtn").addEventListener("click", async () => {
     "- 유형: " + qtype + "\n" +
     "- 개수: " + cnt + "개\n\n" +
     (pendingConcept
-      ? "첨부한 사진은 수업에서 쓰는 개념 자료(교과서·정리 등)다. 이 자료에 나온 개념·정의·표기·접근법의 범위 안에서 출제하라. 자료에 없는 심화 개념을 끌어오지 말고, 자료가 다루는 내용으로 풀리는 문항을 만들어라. (위의 과목 범위 지침도 함께 지킨다.)\n\n"
+      ? "첨부한 자료(사진 또는 PDF)는 수업에서 쓰는 개념 자료(교과서·정리 등)다. 이 자료에 나온 개념·정의·표기·접근법의 범위 안에서 출제하라. 자료에 없는 심화 개념을 끌어오지 말고, 자료가 다루는 내용으로 풀리는 문항을 만들어라. (위의 과목 범위 지침도 함께 지킨다.)\n\n"
       : "") +
     "각 문항에 정답과 풀이를 함께 줘." + (qtype === "서술형" ? " 서술형이므로 배점 포함 채점기준도 함께." : "");
   // 보관·검증용 메타 기록
@@ -622,43 +632,84 @@ $("genBtn").addEventListener("click", async () => {
   if (out !== null) showResult(out, "create");
 });
 
-// 개념 자료(출제용) 첨부
-$("conceptAttachBtn").addEventListener("click", () => $("conceptFileInput").click());
-$("conceptFileInput").addEventListener("change", e => {
-  const file = e.target.files && e.target.files[0];
+// ---- 첨부(사진·PDF): 버튼 / Ctrl+V 붙여넣기 / 끌어다 놓기 ----
+const MAX_ATTACH_MB = 15; // Gemini 요청 한도(약 20MB, base64로 커짐)를 넘지 않게
+const SLOTS = {
+  concept: { input: "conceptFileInput", btn: "conceptAttachBtn", tag: "conceptTag", thumb: "conceptThumb",
+             pdf: "conceptPdf", name: "conceptName", hint: "conceptHint", remove: "removeConcept", panel: "panel-create",
+             set: v => { pendingConcept = v; } },
+  solve:   { input: "fileInput", btn: "attachBtn", tag: "attachedTag", thumb: "attachedThumb",
+             pdf: "attachedPdf", name: "attachedName", hint: "attachedHint", remove: "removeImg", panel: "panel-solve",
+             set: v => { pendingImage = v; } }
+};
+function isPdf(file) { return file.type === "application/pdf" || /\.pdf$/i.test(file.name || ""); }
+function attachFile(slotKey, file) {
+  const sl = SLOTS[slotKey];
   if (!file) return;
+  const pdf = isPdf(file);
+  if (!pdf && !(file.type || "").startsWith("image/")) {
+    alert("사진(이미지)이나 PDF 파일만 올릴 수 있어요." + (/\.hwpx?$/i.test(file.name || "") ? "\n한글 파일은 PDF로 저장한 뒤 올려주세요." : ""));
+    return;
+  }
+  if (file.size > MAX_ATTACH_MB * 1024 * 1024) {
+    alert("파일이 너무 커요(" + (file.size / 1048576).toFixed(1) + "MB). " + MAX_ATTACH_MB + "MB 이하로 줄이거나, 필요한 쪽만 따로 저장해 올려주세요.");
+    return;
+  }
   const reader = new FileReader();
   reader.onload = () => {
     const r = String(reader.result);
-    pendingConcept = { base64: r.split(",")[1], mime: file.type || "image/jpeg" };
-    $("conceptThumb").src = r;
-    $("conceptTag").classList.remove("hidden");
+    sl.set({ base64: r.split(",")[1], mime: pdf ? "application/pdf" : (file.type || "image/jpeg") });
+    $(sl.thumb).classList.toggle("hidden", pdf);
+    $(sl.pdf).classList.toggle("hidden", !pdf);
+    if (!pdf) $(sl.thumb).src = r;
+    $(sl.name).textContent = pdf ? (file.name || "PDF") + " 첨부됨" : (file.name && file.name !== "image.png" ? file.name + " 첨부됨" : "사진 첨부됨");
+    $(sl.tag).classList.remove("hidden");
+    $(sl.hint).classList.add("hidden");
   };
   reader.readAsDataURL(file);
-  e.target.value = "";
+}
+Object.keys(SLOTS).forEach(k => {
+  const sl = SLOTS[k];
+  $(sl.btn).addEventListener("click", () => $(sl.input).click());
+  $(sl.input).addEventListener("change", e => {
+    attachFile(k, e.target.files && e.target.files[0]);
+    e.target.value = "";
+  });
+  $(sl.remove).addEventListener("click", () => {
+    sl.set(null); $(sl.tag).classList.add("hidden"); $(sl.hint).classList.remove("hidden");
+  });
+  // 끌어다 놓기: 해당 탭 영역 전체
+  const panel = $(sl.panel);
+  let depth = 0;
+  panel.addEventListener("dragenter", e => { if (!hasFiles(e)) return; e.preventDefault(); depth++; panel.classList.add("dragover"); });
+  panel.addEventListener("dragover", e => { if (!hasFiles(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = "copy"; });
+  panel.addEventListener("dragleave", () => { depth = Math.max(0, depth - 1); if (!depth) panel.classList.remove("dragover"); });
+  panel.addEventListener("drop", e => {
+    if (!hasFiles(e)) return;
+    e.preventDefault(); depth = 0; panel.classList.remove("dragover");
+    attachFile(k, e.dataTransfer.files[0]);
+  });
 });
-$("removeConcept").addEventListener("click", () => { pendingConcept = null; $("conceptTag").classList.add("hidden"); });
-
-$("attachBtn").addEventListener("click", () => $("fileInput").click());
-$("fileInput").addEventListener("change", e => {
-  const file = e.target.files && e.target.files[0];
-  if (!file) return;
-  const reader = new FileReader();
-  reader.onload = () => {
-    const r = String(reader.result);
-    pendingImage = { base64: r.split(",")[1], mime: file.type || "image/jpeg" };
-    $("attachedThumb").src = r;
-    $("attachedTag").classList.remove("hidden");
-  };
-  reader.readAsDataURL(file);
-  e.target.value = "";
+function hasFiles(e) { return e.dataTransfer && Array.from(e.dataTransfer.types || []).includes("Files"); }
+// 파일을 탭 바깥에 떨어뜨려도 브라우저가 파일을 열어버리지 않게
+window.addEventListener("dragover", e => { if (hasFiles(e)) e.preventDefault(); });
+window.addEventListener("drop", e => { if (hasFiles(e)) e.preventDefault(); });
+// Ctrl+V: 클립보드에 사진·파일이 있으면 지금 열린 탭(출제/풀이)에 첨부. 글자만 있으면 평소처럼 붙여넣기.
+document.addEventListener("paste", e => {
+  const items = Array.from((e.clipboardData && e.clipboardData.items) || []);
+  const it = items.find(i => i.kind === "file" && (i.type.startsWith("image/") || i.type === "application/pdf"));
+  if (!it) return;
+  const slot = !$("panel-create").classList.contains("hidden") ? "concept"
+             : !$("panel-solve").classList.contains("hidden") ? "solve" : null;
+  if (!slot || !$("settings").classList.contains("hidden")) return;
+  e.preventDefault();
+  attachFile(slot, it.getAsFile());
 });
-$("removeImg").addEventListener("click", () => { pendingImage = null; $("attachedTag").classList.add("hidden"); });
 
 $("solveBtn").addEventListener("click", async () => {
   const problem = $("problem").value.trim();
-  if (!problem && !pendingImage) { alert("문제를 입력하거나 사진을 올려주세요."); return; }
-  lastLabel = problem ? problem.replace(/\s+/g, " ").slice(0, 40) : "사진 문제";
+  if (!problem && !pendingImage) { alert("문제를 입력하거나 사진·PDF를 올려주세요."); return; }
+  lastLabel = problem ? problem.replace(/\s+/g, " ").slice(0, 40) : (pendingImage.mime === "application/pdf" ? "PDF 문제" : "사진 문제");
   lastScope = "";  // 풀이 모드는 과목 범위 정보 없음
   let parts;
   if (pendingImage) {
