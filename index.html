@@ -255,7 +255,9 @@ function parseFirebaseConfig(text) {
   const keys = ["apiKey","authDomain","projectId","storageBucket","messagingSenderId","appId"];
   const cfg = {};
   keys.forEach(k => {
-    const m = text.match(new RegExp(k + "\\s*:\\s*[\"']([^\"']+)[\"']"));
+    // 콘솔 형식(apiKey: "…"), 설정창에 보이는 JSON 형식("apiKey": "…"), 폰 자판의 둥근 따옴표(“…”) 모두 읽음
+    const Q = "[\"'\u201C\u201D\u2018\u2019]";
+    const m = text.match(new RegExp(k + Q + "?\\s*:\\s*" + Q + "([^\"'\u201C\u201D\u2018\u2019]+)" + Q));
     if (m) cfg[k] = m[1];
   });
   return (cfg.apiKey && cfg.projectId) ? cfg : null;
